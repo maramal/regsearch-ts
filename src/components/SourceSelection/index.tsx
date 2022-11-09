@@ -1,18 +1,27 @@
-import { useState } from "react";
-import { Container, Row, Col, Button } from "react-bootstrap";
-import TextInput from "./TextInput";
+import { useState, useEffect, useContext } from "react"
+import { Container, Row, Col, Button } from "react-bootstrap"
+import { GlobalContext } from "../context/GlobalContext"
+import TextInput from "./TextInput"
 
 export default function SourceSelection() {
-	const [source, setSource] = useState("");
+	const context = useContext(GlobalContext)
+	
+	const [source, setSource] = useState("")
 
 	function getSourceComponent() {
 		switch (source) {
 			case "text":
-				return <TextInput />;
+				return <TextInput />
 			default:
-				return <p>Source component not found</p>;
+				return <p>Source component not found</p>
 		}
 	}
+	
+	useEffect(() => {
+		if (context.text.length > 0) {
+			setSource("text")
+		}
+	}, [context.text])
 
 	return (
 		<Container>
@@ -26,7 +35,7 @@ export default function SourceSelection() {
 					<Button
 						variant="primary"
 						onClick={() => {
-							setSource("text");
+							setSource("text")
 						}}
 						disabled={source === "text"}
 					>
@@ -37,5 +46,5 @@ export default function SourceSelection() {
 
 			{source !== "" && getSourceComponent()}
 		</Container>
-	);
+	)
 }
