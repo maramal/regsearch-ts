@@ -1,12 +1,12 @@
-import splitLines from "split-lines";
-import { GlobalContextDefaultValue } from "../context/GlobalContext";
+import splitLines from "split-lines"
+import { GlobalContextDefaultValue } from "../context/GlobalContext"
 import {
     LOCATIONTYPE,
     Rule,
     RULE_LOCATION_NEXT,
     RULE_REPLACETYPE_LINE,
     RULE_REPLACETYPE_OCCURRENCE
-} from "../Rules/CreateRule";
+} from "../Rules/CreateRule"
 
 export class FileProcess {
     private context: GlobalContextDefaultValue
@@ -29,15 +29,14 @@ export class FileProcess {
     processLines() {
         this.setStatus("Starting to process lines")
 
-        debugger
-
+        // Rule processing
         for (let ri = 0; ri < this.rules.length; ri++) {
             const rule = this.context.rules[ri]
 
             if (this.context.newText.length > 0) {
-                this.lines = splitLines(this.context.newText, { preserveNewlines: true });
+                this.lines = splitLines(this.context.newText, { preserveNewlines: true })
             } else {
-                this.lines = splitLines(this.context.text, { preserveNewlines: true });
+                this.lines = splitLines(this.context.text, { preserveNewlines: true })
             }
 
             const {
@@ -47,28 +46,51 @@ export class FileProcess {
                 sourceSearchPattern,
                 targetSearchPattern,
                 value
-            } = rule;
+            } = rule
 
             // Line processing
             for (let li = 0; li < this.lines.length; li++) {
-                let line = this.lines[li];
+                let line = this.lines[li]
 
                 this.setStatus(`Processed line ${li+1} from ${this.lines.length} lines`)
 
-                if (this.context.lines[li] !== undefined) continue;
+                // skip line already added
+                if (this.newLines[li] !== undefined) {
+                    continue
+                }
+
+                // add line skip empty source match
+                if (this.patternMatches(sourceSearchPattern, line) && this.isEmptyMatch(line, sourceSearchPattern)) {
+                    this.newLines = [...this.newLines, line]
+                    continue
+                }
 
                 try {
                     if (replaceType === RULE_REPLACETYPE_LINE) {
                         this.replaceLine(line, sourceSearchPattern, value)
                     } else if (replaceType === RULE_REPLACETYPE_OCCURRENCE) {
+                        // type guards
                         if (location === undefined) throw new Error("location is invalid")
                         if (targetSearchPattern === undefined) throw new Error("target search pattern is invalid")
 
-                        // add current line if it's different from the target search pattern
-                        if (!targetSearchPattern.test(line)) {
-                            this.newLines = [...this.newLines, line]
-                        } else {
-                            this.replaceOccurrence(location, li, sourceSearchPattern, targetSearchPattern, value)
+                        // add current line
+                        this.newLines = [...this.newLines, line]
+
+                        // is a match
+                        if (sourceSearchPattern.test(line)) {
+                            // input value to replace in target
+                            let sourceMatch = line.match(sourceSearchPattern) as string[]
+                            if (sourceMatch === null || sourceMatch.length < 2) {
+                                throw new Error("Cannot determine source search pattern value")
+                            }
+                            const outputValue = sourceMatch[1]
+
+                            if (location === RULE_LOCATION_NEXT) {
+                                this.replaceNextOccurrence(li, targetSearchPattern, value, outputValue)
+                            } else {
+                                this.replacePreviousOccurrence(li, targetSearchPattern, value, outputValue)
+                            }
+                            
                         }                        
                     }
                 } catch (ex: any) {
@@ -91,47 +113,49 @@ export class FileProcess {
         return pattern !== undefined && pattern.test(line) && line !== undefined
     }
 
-    /** Replace the previous or the next occurrence according to the position and assign to the context.newLines
+    /** Replace next occurrence with given parameters
      * 
-     * @param location              Next or previous occurrence
-     * @param li                    Line index
-     * @param sourceSearchPattern   The regular expression to replace
-     * @param targetSearchPattern   The regular expression for the matching line
-     * @param value                 The value to replace the target search pattern
+     * @param li Current line number
+     * @param targetSearchPattern Output Regular Expression
+     * @param value The value to replace the output match for the input
+     * @param outputValue The output value from the source search pattern
      */
-    private replaceOccurrence(location: LOCATIONTYPE, li: number, sourceSearchPattern: RegExp, targetSearchPattern: RegExp, value: string): void {
-        /** Initialize the line number according to the occurrence location
-         * 
-         * @param li The line number
-         * @returns  The line number initialized
-         */
-        const setI = (li: number) => location === RULE_LOCATION_NEXT ? li + 1 : li - 1
+    private replaceNextOccurrence(li: number, targetSearchPattern: RegExp, value: string, outputValue: string) {
+        let i = li + 1
 
-        /** Set the operation according to the occurrence location
-         * 
-         * @param i The sub-line operation
-         * @returns The operation
-         */
-        const operation = (i: number) => location === RULE_LOCATION_NEXT ? i + 1 : i - 1
-
-        /** Checks whether the line is valid or not
-         * 
-         * @param i The line number to check
-         * @returns A boolean that represents the comparation result
-         */
-        const isLineValid = (i: number) => location === RULE_LOCATION_NEXT ? i <= this.lines.length : i >= 0
-
-        let i = setI(li)
-        while (isLineValid(i)) {
+        while (i <= this.lines.length) {
             const line = this.lines[i]
 
             if (this.patternMatches(targetSearchPattern, line)) {
-                this.newLines[i] = line.replace(sourceSearchPattern, value)
+                this.newLines[i] = outputValue.replace(targetSearchPattern, value)
 
-                i = location === RULE_LOCATION_NEXT ? this.lines.length : 0
+                i = this.lines.length
             }
 
-            i = operation(i);
+            i++;
+        }
+    }
+
+    /** Replace previous occurrence with given parameters
+     * 
+     * @param li Current line number
+     * @param targetSearchPattern Output Regular Expression
+     * @param value The value to replace the output match for the input
+     * @param outputValue The output value from the source search pattern
+     */
+    private replacePreviousOccurrence(li: number, targetSearchPattern: RegExp, value: string, outputValue: string) {
+        let i = li - 1
+
+        while (i >= 0) {
+            const line = this.lines[i]
+
+            if (this.patternMatches(targetSearchPattern, line)) {
+                this.newLines[i] = outputValue.replace(targetSearchPattern, value)
+
+                i = 0
+            }
+
+            i--;
         }
     }
 
@@ -156,5 +180,17 @@ export class FileProcess {
     private setStatus(status: string) {
         status = `${new Date().toUTCString()}: ` + status
         this.context.setStatus([...this.context.status, status])
+    }
+
+    /** Verify given string is empty for given regular expression
+     * 
+     * @param text The text to verify
+     * @param pattern The regular expression to match
+     * @returns The result of the match
+     */
+    private isEmptyMatch(text: string, pattern: RegExp): boolean {
+        const match = text.match(pattern)
+
+        return match === null || match[1].trim().length === 0
     }
 }
