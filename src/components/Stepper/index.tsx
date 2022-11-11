@@ -1,6 +1,5 @@
 import { useContext } from "react";
 import { GlobalContext } from "../context/GlobalContext";
-import { Container } from "react-bootstrap";
 import SourceSelection from "../SourceSelection";
 import Rules from "../Rules";
 import FileProcessing from "../FileProcessing";

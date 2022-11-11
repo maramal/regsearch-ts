@@ -1,12 +1,28 @@
 import splitLines from "split-lines"
 import { GlobalContextDefaultValue } from "../context/GlobalContext"
 import {
-    LOCATIONTYPE,
     Rule,
     RULE_LOCATION_NEXT,
     RULE_REPLACETYPE_LINE,
     RULE_REPLACETYPE_OCCURRENCE
 } from "../Rules/CreateRule"
+
+interface ReplaceOccurrenceParams {
+    /** Line number */
+    li: number
+
+    /** Input Line */
+    input: string
+
+    /** Input Regular Expression */
+    sourceSearchPattern: RegExp
+
+    /** Output Regular Expression */
+    targetSearchPattern: RegExp
+
+    /** Replace output value */
+    value: string
+}
 
 export class FileProcess {
     private context: GlobalContextDefaultValue
@@ -34,9 +50,9 @@ export class FileProcess {
             const rule = this.context.rules[ri]
 
             if (this.context.newText.length > 0) {
-                this.lines = splitLines(this.context.newText, { preserveNewlines: true })
+                this.lines = splitLines(this.context.newText)
             } else {
-                this.lines = splitLines(this.context.text, { preserveNewlines: true })
+                this.lines = splitLines(this.context.text)
             }
 
             const {
@@ -78,17 +94,18 @@ export class FileProcess {
 
                         // is a match
                         if (sourceSearchPattern.test(line)) {
-                            // input value to replace in target
-                            let sourceMatch = line.match(sourceSearchPattern) as string[]
-                            if (sourceMatch === null || sourceMatch.length < 2) {
-                                throw new Error("Cannot determine source search pattern value")
+                            const replaceParams: ReplaceOccurrenceParams = {
+                                li,
+                                input: line,
+                                sourceSearchPattern,
+                                targetSearchPattern,
+                                value,
                             }
-                            const outputValue = sourceMatch[1]
 
                             if (location === RULE_LOCATION_NEXT) {
-                                this.replaceNextOccurrence(li, targetSearchPattern, value, outputValue)
+                                this.replaceNextOccurrence(replaceParams)
                             } else {
-                                this.replacePreviousOccurrence(li, targetSearchPattern, value, outputValue)
+                                this.replacePreviousOccurrence(replaceParams)
                             }
                             
                         }                        
@@ -99,7 +116,7 @@ export class FileProcess {
                 }
             }
 
-            this.context.setNewText(this.newLines.join(""))
+            this.context.setNewText(this.newLines.join("\n"))
         }
     }
 
@@ -115,46 +132,32 @@ export class FileProcess {
 
     /** Replace next occurrence with given parameters
      * 
-     * @param li Current line number
-     * @param targetSearchPattern Output Regular Expression
-     * @param value The value to replace the output match for the input
-     * @param outputValue The output value from the source search pattern
+     * @param params The parameters to replace the next occurrence
      */
-    private replaceNextOccurrence(li: number, targetSearchPattern: RegExp, value: string, outputValue: string) {
-        let i = li + 1
-
+    private replaceNextOccurrence(params: ReplaceOccurrenceParams) {
+        let i = params.li + 1
         while (i <= this.lines.length) {
             const line = this.lines[i]
-
-            if (this.patternMatches(targetSearchPattern, line)) {
-                this.newLines[i] = outputValue.replace(targetSearchPattern, value)
-
+            if (this.patternMatches(params.targetSearchPattern, line)) {
+                this.assignNewLine(i, params.input, params.sourceSearchPattern, params.value)
                 i = this.lines.length
             }
-
             i++;
         }
     }
 
-    /** Replace previous occurrence with given parameters
+    /** Replace next occurrence with given parameters
      * 
-     * @param li Current line number
-     * @param targetSearchPattern Output Regular Expression
-     * @param value The value to replace the output match for the input
-     * @param outputValue The output value from the source search pattern
+     * @param params The parameters to replace the previous occurrence
      */
-    private replacePreviousOccurrence(li: number, targetSearchPattern: RegExp, value: string, outputValue: string) {
-        let i = li - 1
-
+    private replacePreviousOccurrence(params: ReplaceOccurrenceParams) {
+        let i = params.li - 1
         while (i >= 0) {
             const line = this.lines[i]
-
-            if (this.patternMatches(targetSearchPattern, line)) {
-                this.newLines[i] = outputValue.replace(targetSearchPattern, value)
-
+            if (this.patternMatches(params.targetSearchPattern, line)) {
+                this.assignNewLine(i, params.input, params.sourceSearchPattern, params.value)
                 i = 0
             }
-
             i--;
         }
     }
@@ -192,5 +195,16 @@ export class FileProcess {
         const match = text.match(pattern)
 
         return match === null || match[1].trim().length === 0
+    }
+
+    /** Assign a new line to specific index
+     * 
+     * @param i The line index
+     * @param line The line to be replaced
+     * @param pattern The regular expression to search for
+     * @param value The value to replace with
+     */
+    private assignNewLine(i: number, line: string, pattern: RegExp, value: string) {
+        this.newLines[i] = line.replace(pattern, value)
     }
 }
