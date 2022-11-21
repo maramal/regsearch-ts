@@ -38,8 +38,10 @@ export default function Results() {
           <Row>
             <h1>Status</h1>
           </Row>
-          <Row style={{ height: "100%", overflowY: "scroll" }}>
-            {context.status.map((statusLine, i) => <p key={i}>{statusLine}</p>)}
+          <Row style={{ height: "600px", overflowY: "scroll", display: "block" }}>
+            {context.status.map((status, i) => 
+              <p key={i}><strong>{status.dt.toUTCString()}:</strong> {status.value}</p>
+            )}
           </Row>
         </Col>
       </Row>

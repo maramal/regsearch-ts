@@ -1,6 +1,7 @@
-import { useContext, useEffect, useRef, useState } from "react";
-import { Button, Form, ButtonGroup, Modal } from "react-bootstrap";
-import { GlobalContext } from "../context/GlobalContext";
+import { useContext, useEffect, useRef, useState } from "react"
+import { Button, Form, Modal, InputGroup } from "react-bootstrap"
+import { GlobalContext } from "../context/GlobalContext"
+import splitLines from "split-lines"
 
 export const RULE_REPLACETYPE_LINE = "line"
 export const RULE_REPLACETYPE_OCCURRENCE = "occurrence"
@@ -9,12 +10,14 @@ export const RULE_LOCATION_PREVIOUS = "previous"
 
 export type REPLACETYPE = typeof RULE_REPLACETYPE_LINE | typeof RULE_REPLACETYPE_OCCURRENCE
 export type LOCATIONTYPE = typeof RULE_LOCATION_NEXT | typeof RULE_LOCATION_PREVIOUS
+export type VALUETYPE = "value" | "middleware"
 
 export interface Rule {
     name: string
     sourceSearchPattern: RegExp
     replaceType: REPLACETYPE
-    value: string
+    value?: string
+    middlewareIndex?: number
     targetSearchPattern?: RegExp
     location?: LOCATIONTYPE
 }
@@ -24,6 +27,7 @@ interface FormData extends EventTarget {
     sourceSearchPattern: HTMLInputElement
     replaceType: string
     value: HTMLInputElement
+    middlewareIndex: HTMLSelectElement
     targetSearchPattern?: HTMLInputElement
     location?: string
 }
@@ -34,25 +38,31 @@ interface CreateRuleProps {
 }
 
 export default function CreateRule(props: CreateRuleProps) {
-    const context = useContext(GlobalContext);
+    const context = useContext(GlobalContext)
 
-    const [replaceType, setReplaceType] = useState<REPLACETYPE>(RULE_REPLACETYPE_LINE);
-    const [location, setLocation] = useState<LOCATIONTYPE>(RULE_LOCATION_NEXT);
-    const [status, setStatus] = useState("");
+    const [replaceType, setReplaceType] = useState<REPLACETYPE>(RULE_REPLACETYPE_LINE)
+    const [location, setLocation] = useState<LOCATIONTYPE>(RULE_LOCATION_NEXT)
+    const [status, setStatus] = useState("")
+    const [valueType, setValueType] = useState("value"as VALUETYPE)
     
-    const nameRef = useRef<HTMLInputElement>(null);
+    const nameRef = useRef<HTMLInputElement>(null)
 
     function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault();
+        e.preventDefault()
 
         const formData = e.target as FormData
 
         const rule: Rule = {
             name: formData.name.value,
             sourceSearchPattern: new RegExp(formData.sourceSearchPattern.value),
-            replaceType,
-            value: formData.value.value
-        };
+            replaceType
+        }
+
+        if (valueType === "value") {
+            rule.value = formData.value.value
+        } else {
+            rule.middlewareIndex = parseInt(formData.middlewareIndex.value)
+        }
 
         if (replaceType === RULE_REPLACETYPE_OCCURRENCE) {
             if (formData.targetSearchPattern === undefined) {
@@ -60,26 +70,26 @@ export default function CreateRule(props: CreateRuleProps) {
                 return
             }
 
-            rule.targetSearchPattern = new RegExp(formData.targetSearchPattern.value);
-            rule.location = location;
+            rule.targetSearchPattern = new RegExp(formData.targetSearchPattern.value)
+            rule.location = location
         }
 
-        context.setRules([...context.rules, rule]);
+        context.setRules([...context.rules, rule])
 
-        (e.target as HTMLFormElement).reset();
-        handleReset();
+        handleReset()
     }
 
     function handleReset() {
-        setReplaceType(RULE_REPLACETYPE_LINE);
-        setLocation(RULE_LOCATION_NEXT);
-        setStatus("");
+        setReplaceType(RULE_REPLACETYPE_LINE)
+        setLocation(RULE_LOCATION_NEXT)
+        setStatus("")
+        setValueType("value")
 
-        props.setDisplayNewRule(false);
+        props.setDisplayNewRule(false)
     }
-
+ 
     useEffect(() => {
-        nameRef.current?.focus();
+        nameRef.current?.focus()
     }, [props.displayNewRule])
 
     return (
@@ -101,7 +111,6 @@ export default function CreateRule(props: CreateRuleProps) {
                         <Form.Control type="text" id="name" name="name" ref={nameRef} required />
                     </Form.Group>
 
-
                     <Form.Group className="mb-3">
                         <Form.Label htmlFor="sourceSearchPattern">Source search pattern:</Form.Label>
                         <Form.Control
@@ -118,13 +127,15 @@ export default function CreateRule(props: CreateRuleProps) {
                             id="replaceType"
                             name="replaceType"
                             onChange={(e) => {
-                                setReplaceType(e.target.value as REPLACETYPE);
+                                setReplaceType(e.target.value as REPLACETYPE)
                             }}
                             defaultValue={replaceType}
                             required
                         >
                             <option value="line">Replace line</option>
-                            <option value="occurrence">Replace occurrence</option>
+                            {splitLines(context.text).length > 3 && (
+                                <option value="occurrence">Replace occurrence</option>
+                            )}                            
                         </Form.Select>
                     </Form.Group>
 
@@ -140,10 +151,23 @@ export default function CreateRule(props: CreateRuleProps) {
                         </Form.Group>
                     )}
 
-                    <Form.Group className="mb-3">
-                        <Form.Label htmlFor="value">Value:</Form.Label>
-                        <Form.Control type="text" id="value" name="value" required />
-                    </Form.Group>
+                    <InputGroup className="mb-3">
+                        <Form.Select title="Value type" value={valueType} onChange={e => { setValueType(e.target.value as VALUETYPE) }}>
+                            <option value="value">Value</option>
+                            <option value="middleware">Middleware</option>
+                        </Form.Select>
+                        {valueType === "value" ? (
+                            <Form.Control type="text" id="value" name="value" required />
+                        ) : (
+                            <Form.Select title="Choose Middleware" id="middlewareIndex" name="middlewareIndex" required>
+                                <option value="">Select middleware</option>
+                                {context.middlewares.map((middleware, i) => (
+                                    <option key={i} value={i}>{middleware.name} ({middleware.request.method})</option>
+                                ))}
+                            </Form.Select>
+                        )}
+                        
+                    </InputGroup>
 
                     {replaceType === "occurrence" && (
                         <Form.Group className="mb-3">
@@ -152,7 +176,7 @@ export default function CreateRule(props: CreateRuleProps) {
                                 id="location"
                                 value={location}
                                 onChange={(e) => {
-                                    setLocation(e.target.value as LOCATIONTYPE);
+                                    setLocation(e.target.value as LOCATIONTYPE)
                                 }}
                             >
                                 <option value="next">Next occurrence</option>
@@ -170,5 +194,5 @@ export default function CreateRule(props: CreateRuleProps) {
                 </Modal.Footer>
             </Form>
         </Modal>
-    );
+    )
 }

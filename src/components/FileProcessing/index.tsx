@@ -5,8 +5,8 @@ import { FileProcess } from "./FileProcess";
 
 export default function FileProcessing() {
     const context = useContext(GlobalContext);
-
     const [processFinished, setProcessFinished] = useState(false)
+    const fp = new FileProcess(context)
 
     function viewResults() {
         context.setCurrentStep(4);
@@ -19,7 +19,6 @@ export default function FileProcessing() {
     }, [context.newText]);
 
     useEffect(() => {
-        const fp = new FileProcess(context)
         fp.processLines()
     }, [])
 

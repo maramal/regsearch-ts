@@ -13,6 +13,9 @@ export default function Rules() {
     }
 
     function deleteRule(i: number) {
+        const confirmation = confirm(`Do you really want to delete the rule "${context.rules[i].name}"?`)
+        if (!confirmation) return
+
         let $rules = [...context.rules];
         $rules.splice(i, 1);
         context.setRules($rules);
