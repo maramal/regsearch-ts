@@ -8,9 +8,11 @@ import {
     RULE_REPLACETYPE_OCCURRENCE
 } from "../Rules/CreateRule"
 
+const groupPattern = /\$(\d+)/g
+
 export interface Status {
-	dt: Date,
-	value: string
+    dt: Date,
+    value: string
 }
 
 interface ReplaceOccurrenceParams {
@@ -151,7 +153,7 @@ export class FileProcess {
      * @returns         Whether the pattern matches the line or not
      */
     private patternMatches(pattern: RegExp, line: string): boolean {
-        return pattern !== undefined && pattern.test(line) && line !== undefined
+        return pattern !== undefined && line !== undefined && pattern.test(line)
     }
 
     /** Replace next occurrence with given parameters
@@ -207,15 +209,15 @@ export class FileProcess {
         if (sourceSearchPattern.test(line)) {
             if (middlewareIndex !== undefined) {
                 const params: ReplaceWithMiddlewareParams = {
-                    middlewareIndex, 
-                    pattern: sourceSearchPattern, 
+                    middlewareIndex,
+                    pattern: sourceSearchPattern,
                     line
                 }
                 const replacedValue = await this.replaceWithMiddleware(params)
                 line = line.replace(sourceSearchPattern, replacedValue)
             } else {
                 line = line.replace(sourceSearchPattern, value)
-            }            
+            }
         }
 
         this.newLines = [...this.newLines, line]
@@ -245,12 +247,36 @@ export class FileProcess {
     private isMatchEmpty(text: string, pattern: RegExp): boolean {
         const match = text.match(pattern)
 
-        if (match !== null && match.length > 1) {
-            if (match[1].trim().length === 0) return true
+        if (match !== null && match.length > 0) {
+            if (this.patternHasGroups(pattern)) {
+                if (match[1].trim().length === 0) return true
+            } else {
+                if (match[0].trim().length === 0) return true
+            }
+
             return false
         }
 
         return true
+    }
+
+    /** Returns an array of groups
+     * 
+     * @param pattern The regular expression
+     * @returns Array of groups or an empty array if there is none
+     */
+    private getPatternGroups(pattern: RegExp): string[] {
+        return pattern.toString().match(pattern) as string[]
+    }
+
+    /** Checks if the given regular expression contains groups
+     * 
+     * @param pattern A regular expression
+     * @returns If the regular expression has groups
+     */
+    private patternHasGroups(pattern: RegExp): boolean {
+        const selfMatch = this.getPatternGroups(pattern)
+        return selfMatch !== null && selfMatch.length > 1
     }
 
     /** Assign a new line to specific index
@@ -265,14 +291,14 @@ export class FileProcess {
     private async assignNewLine(i: number, line: string, sourceSearchPattern: RegExp, targetSearchPattern: RegExp, value: string, middlewareIndex?: number) {
         if (middlewareIndex !== undefined) {
             const params: ReplaceWithMiddlewareParams = {
-                middlewareIndex, 
-                pattern: targetSearchPattern, 
+                middlewareIndex,
+                pattern: targetSearchPattern,
                 line: this.lines[i]
             }
             value = await this.replaceWithMiddleware(params)
         }
 
-        this.newLines[i] = line.replace(targetSearchPattern, value)
+        this.newLines[i] = line.replace(sourceSearchPattern, value)
     }
 
     /** Get value from API
@@ -285,15 +311,15 @@ export class FileProcess {
         const matches = params.line.match(params.pattern)
         matches?.splice(0, 1)
 
-        let body = {}
-        let qs = ""
+        let body = middleware.request.body
+        let qs = middleware.request.queryString
 
-        if (middleware.request.body !== undefined && matches !== null && matches.length > 0) {
-            body = this.getBody(middleware.request.body, matches)
+        if (body !== undefined && body.trim().length > 0 && matches !== null && matches.length > 0) {
+            body = this.getBody(body, matches)
         }
 
-        if (middleware.request.queryString !== undefined && matches !== null && matches.length > 0) {
-            qs = this.getQueryString(middleware.request.queryString, matches)
+        if (qs !== undefined && qs.trim().length > 0 && matches !== null && matches.length > 0) {
+            qs = this.getQueryString(qs, matches)
         }
 
         const config = {
@@ -310,14 +336,18 @@ export class FileProcess {
             config.headers[header.type] = header.value
         })
 
-        const res = await axios(config)
-        if (res.status > 205) {
-            throw new Error("Couldn't get data from API")
+        try {
+            const res = await axios(config)
+            if (res.status > 205) {
+                throw new Error("Couldn't get data from API")
+            }
+            const response = res.data
+            const svalue = '`' + middleware.response.responseMap + '`'
+            return eval(svalue) as string
+        } catch (ex: any) {
+            this.setStatus(ex.message)
+            return ""
         }
-        const response = res.data
-        const svalue = middleware.response.responseMap
-        return eval(svalue) as string
-
     }
 
     /** Get the query string with replaced group values

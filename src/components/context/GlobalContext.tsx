@@ -43,7 +43,7 @@ const defaultMiddlewares: Middleware[] = [
                     value: "application/json"
                 }
             ],
-            responseMap: "`${response.name} <${response.email}>`"
+            responseMap: "${response.name} <${response.email}>"
         }
     }
 ]
