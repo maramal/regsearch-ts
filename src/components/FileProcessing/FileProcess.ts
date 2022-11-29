@@ -319,16 +319,15 @@ export class FileProcess {
         }
 
         if (qs !== undefined && qs.trim().length > 0 && matches !== null && matches.length > 0) {
-            qs = this.getQueryString(qs, matches)
+            qs = "?" + this.getQueryString(qs, matches)
         }
 
         const config = {
-            url: middleware.request.url,
+            url: middleware.request.url + qs,
             timeout: 1000,
             method: middleware.request.method,
             headers: {} as any,
             body,
-            params: qs,
         }
 
         middleware.request.headers.forEach(header => {
